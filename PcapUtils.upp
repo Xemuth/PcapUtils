@@ -1,0 +1,15 @@
+description "\37728,170,0";
+
+uses
+	Core;
+
+library
+	pcap;
+
+file
+	PcapListener.h,
+	PCapListener.cpp,
+	Ethernet.h,
+	Ip.h,
+	Tcp.h;
+
