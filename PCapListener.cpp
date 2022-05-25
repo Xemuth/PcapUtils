@@ -7,16 +7,18 @@ char get_printable_char(char to_print){
 		return'.';
 }
 
-Upp::String dump_buffer(const char* buffer, int size, int row_dump_size){
+Upp::String dump_buffer(const char* buffer, int size, int row_dump_size, bool add_ascii_interpretation){
 	static const char* hexa = "0123456789ABCDEF";
 	Upp::String hexa_dump;
 	int row_start_offset = 0;
 	int i = 0;
 	for(i = 0; i < size; i++){
 		if(i != 0 && i % row_dump_size == 0){
-			hexa_dump << " | ";
-			for(int e = row_start_offset; e < (row_start_offset + row_dump_size); e++){
-				hexa_dump << get_printable_char(buffer[e]);
+			if(add_ascii_interpretation){
+				hexa_dump << " | ";
+				for(int e = row_start_offset; e < (row_start_offset + row_dump_size); e++){
+					hexa_dump << get_printable_char(buffer[e]);
+				}
 			}
 			hexa_dump << "\n";
 			row_start_offset = i;
@@ -25,45 +27,18 @@ Upp::String dump_buffer(const char* buffer, int size, int row_dump_size){
 		hexa_dump << hexa[(buffer[i] & 0x0F)];
 		hexa_dump << " ";
 	}
-	int remain_to_print = row_dump_size - (i % row_dump_size);
-	for( int q = 0; q < (remain_to_print * 3); q++){
-		hexa_dump << " ";
+	if(add_ascii_interpretation){
+		int remain_to_print = row_dump_size - (i % row_dump_size);
+		for( int q = 0; q < (remain_to_print * 3); q++){
+			hexa_dump << " ";
+		}
+		hexa_dump << " | ";
+		for(int q = row_start_offset; q < (row_start_offset + (row_dump_size - remain_to_print)); q++){
+			hexa_dump << get_printable_char(buffer[q]);
+		}
 	}
-	hexa_dump << " | ";
-	for(int q = row_start_offset; q < (row_start_offset + (row_dump_size - remain_to_print)); q++){
-		hexa_dump << get_printable_char(buffer[q]);
-	}
-	LOG(hexa_dump);
 	return hexa_dump;
 }
-
-/*
-void dump_buffer(const char* buffer, int size, int row_dump_size){
-	static const char* hexa = "0123456789ABCDEF";
-	ASSERT_(row_dump_size <= 32, "Invalide size for dump");
-	char buffer_row[132];
-	buffer_row[ row_dump_size * 3] = '|';
-	buffer_row[ row_dump_size * 3 + 1] = ' ';
-	int loop_count = (size / row_dump_size) + (((size % row_dump_size) > 0)? 1 : 0);
-	const char* position = buffer;
-	for(int i = 0; i < loop_count; i++){
-		for(int e = 0; e < row_dump_size; e++){
-			int pos_letter = 3 * row_dump_size + 3 + e + 1;
-			int pos_hexa = e * 3;
-			buffer_row[pos_hexa] = hexa[position[0] & 0xF0 >> 4];
-			buffer_row[pos_hexa + 1] = hexa[position[0] & 0x0F];
-			buffer_row[pos_hexa + 2] = ' ';
-			if( position[0] >= 32 and position[0] < 127){
-				buffer_row[pos_letter] = position[0];
-			}else{
-				buffer_row[pos_letter] = '.';
-			}
-			position++;
-		}
-		LOG(buffer_row);
-	}
-}
-*/
 
 Upp::String buffer_to_string(const unsigned char* buffer, int size){
 	static const char* hexa = "0123456789ABCDEF";
@@ -173,8 +148,10 @@ namespace Upp{
 				if(trace_packets) DumpIPv4(packet.ipv4);
 				if(packet.ipv4 .protocol == 0X06){ // Tcp
 					packet.tcp = decode_tcp(bytes + sizeof(packet.ethernet) + sizeof(packet.ipv4));
-					packet.data_without_header = bytes + sizeof(packet.ethernet) + sizeof(packet.ipv4) + (packet.tcp.data_offset * sizeof(int32 )); // False, should look for the size of tcp
-					if(trace_packets) DumpTcp(packet.tcp);
+					packet.options = decode_options(packet.tcp, bytes + sizeof(packet.ethernet) + sizeof(packet.ipv4) + sizeof(packet.tcp));
+					packet.data_without_header = bytes + sizeof(packet.ethernet) + sizeof(packet.ipv4) + sizeof(packet.tcp) + packet.options.options_size;
+					packet.data_size = packet.h->len - (sizeof(packet.ethernet) + sizeof(packet.ipv4) + sizeof(packet.tcp) + packet.options.options_size);
+					if(trace_packets) DumpTcp(packet);
 				}
 			break;
 			case EtherType::IPv6:
@@ -182,8 +159,10 @@ namespace Upp{
 				if(trace_packets) DumpIPv6(packet.ipv6);
 				if(packet.ipv6.next_header == 0x06){ //TCP
 					packet.tcp = decode_tcp(bytes + sizeof(packet.ethernet) + sizeof(packet.ipv6));
-					packet.data_without_header = bytes + sizeof(packet.ethernet) + sizeof(packet.ipv6) + sizeof(packet.tcp) + packet.tcp.data_offset;
-					if(trace_packets) DumpTcp(packet.tcp);
+					packet.options = decode_options(packet.tcp, bytes + sizeof(packet.ethernet) + sizeof(packet.ipv4) + sizeof(packet.tcp));
+					packet.data_without_header = bytes + sizeof(packet.ethernet) + sizeof(packet.ipv6) + sizeof(packet.tcp) + packet.options.options_size;
+					packet.data_size = packet.h->len - (sizeof(packet.ethernet) + sizeof(packet.ipv4) + sizeof(packet.tcp) + packet.options.options_size);
+					if(trace_packets) DumpTcp(packet);
 				}
 			break;
 		}
@@ -198,12 +177,12 @@ namespace Upp{
 			case EtherType::IPv4:
 				DumpIPv4(packet.ipv4);
 				if(packet.ipv4 .protocol == 0X06) // Tcp
-					DumpTcp(packet.tcp);
+					DumpTcp(packet);
 			break;
 			case EtherType::IPv6:
 				DumpIPv6(packet.ipv6);
 				if(packet.ipv6.next_header == 0x06) // Tcp
-					DumpTcp(packet.tcp);
+					DumpTcp(packet);
 			break;
 		}
 	}
@@ -239,7 +218,8 @@ namespace Upp{
 		//TODO
 	}
 	
-	void PcapListener::DumpTcp(TcpHeader& packet_header){
+	void PcapListener::DumpTcp(CurrentPacket& packet){
+		TcpHeader packet_header = packet.tcp;
 		Cout() << "--------- TCP header ---------------" << EOL;
 		Cout() << "\t" << "Port source: " << Format("%d", packet_header.src_port) << EOL;
 		Cout() << "\t" << "Port destination: " << Format("%d", packet_header.dst_port) << EOL;
@@ -251,6 +231,11 @@ namespace Upp{
 		Cout() << "\t" << "Window: " << Format("%d", packet_header.window) << EOL;
 		Cout() << "\t" << "Checksum: " << Format("%04x", packet_header.checksum) << EOL;
 		Cout() << "\t" << "Urgent pointer: " << Format("%x", packet_header.urgent_pointer) << EOL;
+		if(packet.options.options_size > 0){
+			Cout() << "--------- TCP Options ---------------" << EOL;
+			Cout() << "\t" << "Options size: " << Format("%d", packet.options.options_size) << EOL;
+			Cout() << "\t" << "Options : " << dump_buffer((const char*) packet.options.options_raw, packet.options.options_size , packet.options.options_size, false) << EOL;
+		}
 	}
 
 	pcap_if_t* PcapListener::find_device(pcap_if_t* itf, const char* name){

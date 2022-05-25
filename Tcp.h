@@ -36,4 +36,16 @@ static TcpHeader decode_tcp(const unsigned char* header_start){
 	return tcp;
 }
 
+struct TcpOptions{
+	byte options_size;
+	byte options_raw[50];
+};
+
+static TcpOptions decode_options(TcpHeader tcp, const unsigned char* header_start){
+	TcpOptions options;
+	options.options_size = (tcp.data_offset * 4) - sizeof(tcp);
+	memcpy(options.options_raw, header_start, options.options_size);
+	return options;
+}
+
 #endif

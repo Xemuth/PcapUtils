@@ -21,7 +21,7 @@ struct Ipv4Header{
 	unsigned short total_length;
 	unsigned short identification_number;
 	unsigned short flags:3;
-	unsigned short offset: 13;
+	unsigned short offset:13;
 	unsigned char time_to_live;
 	unsigned char protocol;
 	unsigned short header_checksum;
@@ -33,6 +33,11 @@ static Ipv4Header decode_ipv4(const unsigned char* header_start){
 	Ipv4Header ip;
 	memcpy(&ip, header_start, sizeof(Ipv4Header));
 	
+	// x86 little endian mean we have to inverte both value
+	byte old_version = ip.version;
+	ip.version = ip.header_length;
+	ip.header_length = old_version;
+	
 	ip.total_length = ntohs(ip.total_length);
 	ip.identification_number = ntohs(ip.identification_number);
 	ip.header_checksum = ntohs(ip.header_checksum);
@@ -40,7 +45,7 @@ static Ipv4Header decode_ipv4(const unsigned char* header_start){
 	ip.dest_addr = ntohl(ip.dest_addr);
 	
 	byte* short_flag_and_offset = (byte*) &ip;
-	short_flag_and_offset += 7;
+	short_flag_and_offset += 6;
 	*((short*)short_flag_and_offset) = ntohs(*((short*)short_flag_and_offset)); // Converting the bitfield
 	
 	return ip;

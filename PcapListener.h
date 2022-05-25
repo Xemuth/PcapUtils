@@ -6,7 +6,7 @@
 #include "Ip.h"
 #include "Tcp.h"
 
-Upp::String dump_buffer(const char* buffer, int size, int row_dump_size);
+Upp::String dump_buffer(const char* buffer, int size, int row_dump_size, bool add_ascii_interpretation = true);
 
 namespace Upp{
 
@@ -27,6 +27,8 @@ class PcapListener{
 				union{
 					TcpHeader tcp;
 				};
+				TcpOptions options;
+				int data_size;
 				u_char const * data_without_header;
 				const struct pcap_pkthdr *h;
 				const u_char *bytes;
@@ -65,7 +67,7 @@ class PcapListener{
 		void DumpEthernet(EthHeader& packet_header);
 		void DumpIPv4(Ipv4Header& packet_header);
 		void DumpIPv6(Ipv6Header& packet_header);
-		void DumpTcp(TcpHeader& packet_header);
+		void DumpTcp(CurrentPacket& packet_header);
 		
 		/* TODO: Gestion des filtres et des actions ici */
 		unsigned char* custom_data = nullptr;
